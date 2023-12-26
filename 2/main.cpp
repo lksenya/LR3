@@ -1,46 +1,85 @@
-#include <iostream>
-#include <cctype>
-#include <locale>
-#include "modalphacipher.h"
-#include <codecvt>
-#include <typeinfo>
+#include <UnitTest++/UnitTest++.h>
+#include "cipher.h"
 
-using namespace std;
-
-void check(const wstring& Text, const wstring& key, const bool destructCipherText=false)
+SUITE(KeyTest)
 {
-    try {
-        wstring cipherText;
-        wstring decryptedText;
-        modalphacipher cipher(key);
-        cipherText = cipher.encrypt(Text); // зашифровывание
-        if (destructCipherText) // надо "портить"?
-            cipherText.front() = tolower(cipherText.front()); // "портим"
-        decryptedText = cipher.decrypt(cipherText); // расшифровывание
-        wcout<<L"key="<<key<<endl;
-        wcout<<Text<<endl;
-        wcout<<cipherText<<endl;
-        wcout<<decryptedText<<endl;
-    } catch (const cipher_error & e) {
-        wcerr<<"Error: "<<e.what()<<endl;
+    TEST(ValidKey) {
+        CHECK_EQUAL("odlllreohw",Cipher(5).encrypt("helloworld"));
+    }
+
+    TEST(LongKey) {
+        CHECK_EQUAL("*dlrowolleh",Cipher(11).encrypt("helloworld"));
+    }
+
+    TEST(MinusKey) {
+        CHECK_THROW( Cipher cp(-3), cipher_error);
+    }
+
+    TEST(NotMultiple) {
+        CHECK_EQUAL("w*o*ldllerho",Cipher(6).encrypt("helloworld"));
+    }
+
+    TEST(LenStr) {
+        CHECK_EQUAL("dlrowolleh",Cipher(10).encrypt("helloworld"));
+    }
+
+}
+
+
+struct KeyB_fixture {
+    Cipher * p;
+    KeyB_fixture()
+    {
+        p = new Cipher(5);
+    }
+    ~KeyB_fixture()
+    {
+        delete p;
+    }
+};
+SUITE(EncryptTest)
+{
+    TEST_FIXTURE(KeyB_fixture, UpCaseString) {
+        CHECK_EQUAL("ODLLLREOHW",p->encrypt("HELLOWORLD"));
+    }
+    TEST_FIXTURE(KeyB_fixture, LowCaseString) {
+        CHECK_EQUAL("odlllreohw",p->encrypt("helloworld"));
+    }
+    TEST_FIXTURE(KeyB_fixture, StringWithStar) {
+        CHECK_EQUAL("ol*lr*lo*ew*h*d",p->encrypt("hello*world"));
+    }
+    TEST_FIXTURE(KeyB_fixture, EmptyString) {
+        CHECK_THROW(p->encrypt(""),cipher_error);
+    }
+    TEST_FIXTURE(KeyB_fixture, StringWithNum) {
+        CHECK_THROW(p->encrypt("helloworld123"),cipher_error);
+    }
+    TEST_FIXTURE(KeyB_fixture, NoAlph) {
+        CHECK_THROW(p->encrypt("1234"),cipher_error);
     }
 }
-
-// проверка, чтобы строка состояла только из прописных букв
-bool isValid(const wstring& s)
+SUITE(DecryptText)
 {
-    for(auto c:s)
-        if (!iswalpha(c) || !iswupper(c))
-            return false;
-    return true;
+    TEST_FIXTURE(KeyB_fixture, UpCaseString) {
+        CHECK_EQUAL("HELLOWORLD",p->decrypt("ODLLLREOHW"));
+    }
+    TEST_FIXTURE(KeyB_fixture, LowCaseString) {
+        CHECK_EQUAL("helloworld",p->decrypt("odlllreohw"));
+    }
+    TEST(StringWithStar) {
+        CHECK_EQUAL("helloworld", Cipher(6).decrypt("w*o*ldllerho"));
+    }
+    TEST_FIXTURE(KeyB_fixture, EmptyString) {
+        CHECK_THROW(p->decrypt(""),cipher_error);
+    }
+    TEST_FIXTURE(KeyB_fixture, StringWithNum) {
+        CHECK_THROW(p->decrypt("helloworld123"),cipher_error);
+    }
+    TEST_FIXTURE(KeyB_fixture, NoAlph) {
+        CHECK_THROW(p->decrypt("1234"),cipher_error);
+    }
 }
-int main()
+int main(int argc, char **argv)
 {
-    locale loc("ru_RU.UTF-8");
-    locale::global(loc);
-    check(L"ПРИВЕТ",L"ПРОЩАЙ");
-    check(L"ПРОЩАЙ",L"");
-    check(L"ПРОЩАЙ",L"ПРИВЕТ321");
-    check(L"П Р О Щ А Й",L"ПРИВЕТ");
-    check(L"321",L"ПРИВЕТ");
+    return UnitTest::RunAllTests();
 }
